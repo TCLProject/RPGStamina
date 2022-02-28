@@ -1,0 +1,16 @@
+[
+{
+  "modid": "rpgstamina",
+  "name": "RPG Stamina",
+  "description": "Adds a stamina mechanic to minecraft.",
+  "version": "1.1b",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["TCLProject"],
+  "credits": "",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]
