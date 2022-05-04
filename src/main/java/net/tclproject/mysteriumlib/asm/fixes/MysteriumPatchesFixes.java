@@ -2,7 +2,6 @@ package net.tclproject.mysteriumlib.asm.fixes;
 
 import java.util.function.BiFunction;
 
-import com.vicmatskiv.weaponlib.Tags;
 import com.vicmatskiv.weaponlib.Weapon;
 import com.vicmatskiv.weaponlib.WeaponFireAspect;
 import com.vicmatskiv.weaponlib.compatibility.CompatibilityProvider;
@@ -13,46 +12,47 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemFood;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
+import mods.battlegear2.client.gui.BattlegearInGameGUI;
 import net.tclproject.mysteriumlib.asm.annotations.EnumReturnSetting;
 import net.tclproject.mysteriumlib.asm.annotations.Fix;
-import net.tclproject.rpgstamina.PatchesConfig;
+import net.tclproject.rpgstamina.Config;
 import net.tclproject.rpgstamina.handler.ExtendedPlayer;
 import net.tclproject.rpgstamina.handler.StEventHandler;
 
 public class MysteriumPatchesFixes {
 
+
 	@Fix(insertOnExit=true)
-	public static void onEaten(ItemFood itmf, ItemStack itemstack, World p_77654_2_, EntityPlayer p_77654_3_)
-    {
-		StEventHandler.foodCooldown = ((ItemFood)itemstack.getItem()).func_150905_g(itemstack) * 50;
-        StEventHandler.replenishAmount = Math.round(((ItemFood)itemstack.getItem()).func_150905_g(itemstack) * 2 * PatchesConfig.foodMultiplier);
-        StEventHandler.canReplenish = true;
-        ExtendedPlayer.get(p_77654_3_).replenishStamina(Math.round(((ItemFood)itemstack.getItem()).func_150905_g(itemstack) * 4 * PatchesConfig.foodMultiplier));
-    }
-	
-	@Fix(returnSetting=EnumReturnSetting.ON_TRUE)
-	public static boolean jump(EntityPlayer p) {
-		if (PatchesConfig.preventJump && ExtendedPlayer.get(p).currentStamina == 0) {
-			return true;
+	public static void onEaten(ItemFood food, ItemStack itemStack, World world, EntityPlayer player) {
+
+		if (!world.isRemote) {
+			if (Config.internalFoodStaminaDict.get(itemStack.getItem()) != null) ExtendedPlayer.get(player).gainStamina(Config.internalFoodStaminaDict.get(itemStack.getItem()));
+			else ExtendedPlayer.get(player).gainStamina(Config.defaultFoodReplenishValue);
+
+			if (Config.internalFoodHealthDict.get(itemStack.getItem()) != null) player.setHealth(player.getHealth() + Config.internalFoodHealthDict.get(itemStack.getItem()));
+			else player.setHealth(player.getHealth() + Config.defaultFoodHealthValue);
+
+			StEventHandler.canReplenish = true;
 		}
-		if (PatchesConfig.staminaDrainJump) {
-			ExtendedPlayer.get(p).consumeStamina(PatchesConfig.defaultStaminaForJump);
-			StEventHandler.canReplenish = false;
-			StEventHandler.ticksPassed2 = 0;
-		}
+	}
+
+	@Optional.Method(modid = "battlegear2")
+	@Fix(returnSetting = EnumReturnSetting.ON_TRUE)
+	public static boolean renderBlockBar(BattlegearInGameGUI instance, int x, int y) {
+		if (Config.enableReplaceShieldBar) return true;
 		return false;
 	}
-	
+
 	@Optional.Method(modid="mw")
 	@Fix
 	public static void serverFire(WeaponFireAspect as, EntityLivingBase player, ItemStack itemStack, BiFunction spawnEntityWith, boolean isBurst) {
 	      if (itemStack.getItem() instanceof Weapon && player instanceof EntityPlayer) {
 	         int currentServerAmmo = getAmmo(itemStack);
 	         if (currentServerAmmo > 0) {
-	        	 if (PatchesConfig.staminaDrainGun) {
-	     			ExtendedPlayer.get((EntityPlayer)player).consumeStamina(PatchesConfig.defaultStaminaForGun);
+	        	 if (Config.staminaGainForMWGun != 0) {
+	     			ExtendedPlayer.get((EntityPlayer)player).gainStamina(Config.staminaGainForMWGun);
 	     			StEventHandler.canReplenish = false;
-	     			StEventHandler.ticksPassed2 = 0;
+	     			StEventHandler.timeTickCounter = 0;
 	     		}
 	         }
 	      }
@@ -64,10 +64,10 @@ public class MysteriumPatchesFixes {
 	      if (itemStack.getItem() instanceof Weapon && player instanceof EntityPlayer) {
 	         int currentServerAmmo = getAmmo(itemStack);
 	         if (currentServerAmmo > 0) {
-	        	 if (PatchesConfig.staminaDrainGun) {
-	     			ExtendedPlayer.get((EntityPlayer)player).consumeStamina(PatchesConfig.defaultStaminaForGun);
+	        	 if (Config.staminaGainForMWGun > 0) {
+	     			ExtendedPlayer.get((EntityPlayer)player).gainStamina(Config.staminaGainForMWGun);
 	     			StEventHandler.canReplenish = false;
-	     			StEventHandler.ticksPassed2 = 0;
+	     			StEventHandler.timeTickCounter = 0;
 	     		}
 	         }
 	      }

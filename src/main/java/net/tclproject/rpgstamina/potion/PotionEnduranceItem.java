@@ -6,14 +6,10 @@ import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.EnumAction;
 import net.minecraft.item.ItemFood;
-import net.minecraft.item.ItemPotion;
 import net.minecraft.item.ItemStack;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.potion.PotionHelper;
 import net.minecraft.world.World;
-import net.tclproject.rpgstamina.PatchesConfig;
+import net.tclproject.rpgstamina.Config;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class PotionEnduranceItem extends ItemFood {
@@ -23,7 +19,7 @@ public class PotionEnduranceItem extends ItemFood {
         this.setMaxStackSize(1);
         this.setMaxDamage(0);
         this.setAlwaysEdible();
-        this.setPotionEffect(PatchesConfig.defaultPotionID, 90, 0, 1f);
+        this.setPotionEffect(Config.potionID, 90, 0, 1f);
         this.setCreativeTab(CreativeTabs.tabBrewing);
     }
 
