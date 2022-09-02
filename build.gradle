@@ -17,7 +17,7 @@ buildscript {
 
 apply plugin: 'forge'
 
-version = "1.1b"
+version = "2.0"
 group= "net.tclproject.rpgstamina" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
 archivesBaseName = "rpgstamina"
 
@@ -64,7 +64,7 @@ processResources
 
 jar {
   manifest {
-      attributes 'FMLCorePlugin': 'net.tclproject.mysteriumlib.asm.fixes.MysteriumPatchesFixLoader'
+      attributes 'FMLCorePlugin': 'net.tclproject.rpgstamina.fixes.PatchesLoader'
       attributes 'FMLCorePluginContainsFMLMod': 'true'
   }
 }
