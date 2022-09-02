@@ -3,7 +3,7 @@
   "modid": "rpgstamina",
   "name": "RPG Stamina",
   "description": "Adds a stamina mechanic to minecraft.",
-  "version": "1.1b",
+  "version": "${version}",
   "mcversion": "${mcversion}",
   "url": "",
   "updateUrl": "",
