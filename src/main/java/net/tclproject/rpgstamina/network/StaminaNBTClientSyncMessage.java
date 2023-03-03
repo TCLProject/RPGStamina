@@ -13,14 +13,14 @@ import io.netty.buffer.ByteBuf;
 import net.tclproject.rpgstamina.api.ExtendedPlayer;
 
 
-public class StaminaClientRefreshMessage implements IMessage {
+public class StaminaNBTClientSyncMessage implements IMessage {
 	private NBTTagCompound data;
 
 	// The basic, no-argument constructor MUST be included to use the new automated handling.
-	public StaminaClientRefreshMessage() {}
+	public StaminaNBTClientSyncMessage() {}
 
 	// We need to initialize our data, so we provide a suitable constructor.
-	public StaminaClientRefreshMessage(EntityPlayer player) {
+	public StaminaNBTClientSyncMessage(EntityPlayer player) {
 		data = new NBTTagCompound();
 		ExtendedPlayer.get(player).saveNBTData(data);
 	}
@@ -35,13 +35,12 @@ public class StaminaClientRefreshMessage implements IMessage {
 		ByteBufUtils.writeTag(buffer, data);
 	}
 
-
-	public static class MessageHandler implements IMessageHandler<StaminaClientRefreshMessage, IMessage> {
+	public static class MessageHandler implements IMessageHandler<StaminaNBTClientSyncMessage, IMessage> {
 	// The message handler used to define that gets called whenever the message is sent.
 
 		@Override
 		@SideOnly(Side.CLIENT)
-		public IMessage onMessage(StaminaClientRefreshMessage message, MessageContext ctx) {
+		public IMessage onMessage(StaminaNBTClientSyncMessage message, MessageContext ctx) {
 		// What do the when the message is received.
 		// Return an IMessage object to define a response.
 

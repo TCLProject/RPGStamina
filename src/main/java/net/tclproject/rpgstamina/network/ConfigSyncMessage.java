@@ -37,8 +37,12 @@ public class ConfigSyncMessage implements IMessage {
 		// What do the when the message is received.
 		// Return an IMessage object to define a response.
 
-			Config.enableReplaceFood = (message.data.charAt(0) == '1');
-			Config.enableReplaceShieldBar = (message.data.charAt(1) == '1');
+			String[] settings = message.data.split("\\|");
+			for (String s : settings) {
+				if (s.startsWith("replaceFood:")) Config.enableReplaceFood = s.substring(12).equals("1");
+				else if (s.startsWith("replaceBGShield:")) Config.enableReplaceShieldBar = s.substring(16).equals("1");
+			}
+
 			return null;
 		}
 	}
