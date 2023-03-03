@@ -7,10 +7,11 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.world.World;
 import net.minecraftforge.common.IExtendedEntityProperties;
+import net.tclproject.rpgstamina.RPGStamina;
 import net.tclproject.rpgstamina.config.Config;
-import net.tclproject.rpgstamina.EventHandler;
+import net.tclproject.rpgstamina.config.PlayerStage;
 import net.tclproject.rpgstamina.network.Network;
-import net.tclproject.rpgstamina.network.StaminaClientRefreshMessage;
+import net.tclproject.rpgstamina.network.StaminaNBTClientSyncMessage;
 
 @SuppressWarnings("unused")
 public class ExtendedPlayer implements IExtendedEntityProperties {
@@ -24,7 +25,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 	private final EntityPlayer player;
 
 	// Player values
-	private int currentStamina, maxStamina, playerStage;
+	private int currentStamina, maxStamina;
 
 	// Tick counters
 	private int timeTickCounter, sprintTickCounter, itemUseTickCounter, battlegearShieldTickCounter;
@@ -32,10 +33,12 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		TIME, SPRINT, ITEMUSE, BATTLEGEARSHIELD
 	}
 
+	private String playerStage;
+
 	// Player abilities
-	private boolean canSprint, canJump, canUse, canReplenish;
+	private boolean canSprint, canJump, canUse, canReplenish, canEat;
 	public enum PlayerAbility {
-		SPRINT, JUMP, ITEMUSE, REPLENISH
+		SPRINT, JUMP, ITEMUSE, REPLENISH, EAT
 	}
 
 
@@ -51,11 +54,12 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		this.player = player;
 		this.maxStamina = Config.defaultMaxStamina;
 		this.currentStamina = Config.defaultStamina;
-		this.playerStage = 0;
+		this.playerStage = "";
 		this.canSprint = true;
 		this.canJump = true;
 		this.canUse = true;
 		this.canReplenish = true;
+		this.canEat = true;
 	}
 
 
@@ -79,6 +83,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		this.canJump = source.canJump;
 		this.canUse = source.canUse;
 		this.canReplenish = source.canReplenish;
+		this.canEat = source.canEat;
 
 		this.sync();
 	}
@@ -120,7 +125,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		// Saves every value to the new tag
 		properties.setInteger("CurrentStamina", this.currentStamina);
 		properties.setInteger("MaxStamina", this.maxStamina);
-		properties.setInteger("PlayerStage", this.playerStage);
+		properties.setString("PlayerStage", this.playerStage);
 
 		// Tick counters
 		properties.setInteger("TimeTickCounter", this.timeTickCounter);
@@ -133,6 +138,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		properties.setBoolean("CanJump", this.canJump);
 		properties.setBoolean("CanUse", this.canUse);
 		properties.setBoolean("CanReplenish", this.canReplenish);
+		properties.setBoolean("CanEat", this.canEat);
 
 		// Adds every NBT property inside an NBT folder (the other compound created above).
 		// This ensures mod and vanilla compatibility to not accidentally overwrite an unrelated value.
@@ -156,7 +162,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		// Sets our values to be the ones stored in the NBT.
 		this.currentStamina = properties.getInteger("CurrentStamina");
 		this.maxStamina = properties.getInteger("MaxStamina");
-		this.playerStage = properties.getInteger("PlayerStage");
+		this.playerStage = properties.getString("PlayerStage");
 
 		this.timeTickCounter = properties.getInteger("TimeTickCounter");
 		this.sprintTickCounter = properties.getInteger("SprintTickCounter");
@@ -168,6 +174,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 		this.canJump = properties.getBoolean("CanJump");
 		this.canUse = properties.getBoolean("CanUse");
 		this.canReplenish = properties.getBoolean("CanReplenish");
+		this.canEat = properties.getBoolean("CanEat");
 
 		this.sync();
 	}
@@ -183,7 +190,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 			// Ints
 			properties.setInteger("CurrentStamina", this.currentStamina);
 			properties.setInteger("MaxStamina", this.maxStamina);
-			properties.setInteger("PlayerStage", this.playerStage);
+			properties.setString("PlayerStage", this.playerStage);
 
 			// Tick counters
 			properties.setInteger("TimeTickCounter", this.timeTickCounter);
@@ -197,8 +204,9 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 			properties.setBoolean("CanJump", this.canJump);
 			properties.setBoolean("CanUse", this.canUse);
 			properties.setBoolean("CanReplenish", this.canReplenish);
+			properties.setBoolean("CanEat", this.canEat);
 
-			if (((EntityPlayerMP) player).playerNetServerHandler != null) Network.INSTANCE.sendTo(new StaminaClientRefreshMessage(this.player), (EntityPlayerMP) this.player);
+			if (((EntityPlayerMP) player).playerNetServerHandler != null) Network.INSTANCE.sendTo(new StaminaNBTClientSyncMessage(this.player), (EntityPlayerMP) this.player);
 		}
 	}
 
@@ -215,16 +223,52 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 	@return The maximum amount of stamina this specific player can have. Calculated based on the potion effect, XP level etc.
 	*/
 	public int getMaxStamina() {
-		int value = this.maxStamina + (this.player.experienceLevel * Config.staminaCapacityLevelUPPerEXPLevel) + (this.player.isPotionActive(EventHandler.endurance)? 250 : 0);
+		int value = this.maxStamina + (this.player.experienceLevel * Config.staminaCapacityLevelUPPerEXPLevel) + (this.player.isPotionActive(RPGStamina.endurance)? 250 : 0);
 		return Math.max(value, 0);
 	}
 
 
 	/**
-	@return The current player stage (used by the server only).
+	@return A copy of the current player stage.
 	*/
-	public int getPlayerStage() {
-		return this.playerStage;
+	public PlayerStage getPlayerStage() {
+		if (this.playerStage.equals("null")) return null;
+
+		String stageMaximumValue = "disabled";
+		int realValue = -1;
+		boolean preventFoodEating = false;
+		boolean preventJump = false;
+		boolean preventSprint = false;
+		boolean preventAttack = false;
+		boolean useWhitelistForItemUseList = false;
+		String[] itemUseStrings = new String[0];
+		String[] potionEffects = new String[0];
+
+		String[] splitted = this.playerStage.split("\\|");
+		for (String s : splitted) {
+			if (s.startsWith("stageMaximumValue:")) stageMaximumValue = s.substring(18);
+
+			if (s.startsWith("realValue:")) {
+				try {
+					realValue = Integer.parseInt(s.substring(10));
+				}
+				catch (NumberFormatException ignore) {}
+			}
+
+			if (s.startsWith("preventFoodEating:")) preventFoodEating = s.substring(19).equals("true");
+			if (s.startsWith("preventJump:")) preventJump = s.substring(12).equals("true");
+			if (s.startsWith("preventSprint:")) preventSprint = s.substring(14).equals("true");
+			if (s.startsWith("preventAttack:")) preventAttack = s.substring(14).equals("true");
+			if (s.startsWith("useWhitelistForItemUseList:")) useWhitelistForItemUseList = s.substring(27).equals("true");
+
+			if (s.startsWith("itemUseStrings:")) itemUseStrings = s.substring(16, s.length() - 1).split(">,<");
+			if (s.startsWith("potionEffects:")) potionEffects = s.substring(15, s.length() - 1).split(">,<");
+		}
+
+		PlayerStage result = new PlayerStage(stageMaximumValue, preventFoodEating, preventJump, preventSprint, preventAttack, useWhitelistForItemUseList, itemUseStrings, potionEffects);
+		result.realValue = realValue;
+
+		return result;
 	}
 
 
@@ -238,6 +282,7 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 			case JUMP: return this.canJump;
 			case ITEMUSE: return this.canUse;
 			case REPLENISH: return this.canReplenish;
+			case EAT: return this.canEat;
 		}
 
 		return false;
@@ -299,12 +344,37 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 
 
 	/**
-	Sets the active player stage. Only use this if you know what you're doing.
+	Sets the active player stage from a PlayerStage object.
 
-	@param value The stage ID of the playerStage. By convention, -1 is a disabled stage. 0-x is a specific stage.
+	@param value The stage of the player. By convention, null is a disabled stage.
 	*/
-	public void setPlayerStage(int value) {
-		this.playerStage = value;
+	public void setPlayerStage(PlayerStage value) {
+		if (value == null) this.playerStage = "null";
+		else {
+			this.playerStage = "";
+			this.playerStage += ("stageMaximumValue:" + value.stageMaximumValue + "|");
+			this.playerStage += ("realValue:" + value.realValue + "|");
+			this.playerStage += ("preventFoodEating:" + value.preventFoodEating + "|");
+			this.playerStage += ("preventJump:" + value.preventJump + "|");
+			this.playerStage += ("preventSprint:" + value.preventSprint + "|");
+			this.playerStage += ("preventAttack:" + value.preventAttack + "|");
+			this.playerStage += ("useWhitelistForItemUseList:" + value.useWhitelistForItemUseList + "|");
+
+			this.playerStage += "itemUseStrings:";
+			for (String s : value.itemUseStrings) {
+				this.playerStage += "<" + s + ">,";
+			}
+			this.playerStage = this.playerStage.substring(0, this.playerStage.length() - 1);
+			this.playerStage += "|";
+
+			this.playerStage += "potionEffects:";
+			for (String s : value.potionEffects) {
+				this.playerStage += "<" + s + ">,";
+			}
+			this.playerStage = this.playerStage.substring(0, this.playerStage.length() - 1);
+			this.playerStage += "|";
+		}
+
 		this.sync();
 	}
 
@@ -328,6 +398,9 @@ public class ExtendedPlayer implements IExtendedEntityProperties {
 				break;
 			case REPLENISH:
 				this.canReplenish = value;
+				break;
+			case EAT:
+				this.canEat = value;
 				break;
 		}
 

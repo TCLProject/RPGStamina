@@ -3,10 +3,16 @@ package net.tclproject.rpgstamina;
 import java.util.Collections;
 import java.util.Random;
 
+import cpw.mods.fml.common.Loader;
+import cpw.mods.fml.common.Optional;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
+import net.tclproject.rpgstamina.mechanics.bauble.ItemEnduranceRing;
 import net.tclproject.rpgstamina.mechanics.command.Command;
 import net.tclproject.rpgstamina.client.GuiHealthStamina;
 import net.tclproject.rpgstamina.config.Config;
+import net.tclproject.rpgstamina.mechanics.enchant.EnchantmentLightFeet;
+import net.tclproject.rpgstamina.mechanics.potion.PotionEndurance;
+import net.tclproject.rpgstamina.mechanics.potion.PotionEnduranceItem;
 import net.tclproject.rpgstamina.network.Network;
 
 import cpw.mods.fml.common.FMLCommonHandler;
@@ -15,11 +21,18 @@ import cpw.mods.fml.common.Mod.Instance;
 import cpw.mods.fml.common.event.FMLInitializationEvent;
 import cpw.mods.fml.common.event.FMLPostInitializationEvent;
 import cpw.mods.fml.common.event.FMLPreInitializationEvent;
+import cpw.mods.fml.common.registry.GameRegistry;
 import net.minecraft.client.Minecraft;
+import net.minecraft.enchantment.Enchantment;
 import net.minecraft.init.Items;
+import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.launchwrapper.Launch;
+import net.minecraft.potion.Potion;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.oredict.ShapedOreRecipe;
+import net.minecraftforge.oredict.ShapelessOreRecipe;
 
 
 @Mod(name = ModProperties.NAME, modid = ModProperties.MODID, version = ModProperties.VERSION, guiFactory = ModProperties.GUI_FACTORY_CLASS, useMetadata = true, dependencies = "required-after:MysteriumLib")
@@ -29,6 +42,11 @@ public class RPGStamina {
     public static RPGStamina INSTANCE;
 
     public static EventHandler EVENT_HANDLER;
+
+    public static Enchantment lightFeet;
+    public static Potion endurance;
+    public static Item endurancePot, enduranceRing;
+
     public static boolean isRunningInDevEnvironment;
 
     @Mod.EventHandler
@@ -88,10 +106,32 @@ public class RPGStamina {
 
         Config.init(); // Creates the config
 
+        if (Config.enchantmentEnabled) lightFeet = new EnchantmentLightFeet(Config.enchantmentID, 5);
+
+        if (Config.potionEnabled) {
+            endurance = new PotionEndurance(Config.potionID);
+            endurancePot = new PotionEnduranceItem().setUnlocalizedName("staminaEndurance").setTextureName("rpgstamina:potion_endurance");
+
+            GameRegistry.registerItem(endurancePot, "staminaEndurance");
+            GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(endurancePot), new ItemStack(Items.experience_bottle), Items.golden_carrot));
+
+            if (Loader.isModLoaded("Baubles") && Config.baubleEnabled) baublesRegister();
+        }
+
         if (Config.enableBlazeRodRender) Items.blaze_rod.setFull3D(); // Makes the blaze rod item 3D (Might move to another mod as it's not related).
 
         // Registers the HUD bar if on the client side.
-    	if (FMLCommonHandler.instance().getEffectiveSide().isClient()) MinecraftForge.EVENT_BUS.register(new GuiHealthStamina(Minecraft.getMinecraft()));
+    	if (FMLCommonHandler.instance().getEffectiveSide().isClient()) MinecraftForge.EVENT_BUS.register(new GuiHealthStamina());
+    }
+
+
+    @Optional.Method(modid = "Baubles")
+    public static void baublesRegister() {
+        // Registers the endurance ring with baubles.
+
+        enduranceRing = new ItemEnduranceRing().setUnlocalizedName("staminaRing").setTextureName("rpgstamina:ring_endurance");
+        GameRegistry.registerItem(enduranceRing, "staminaRing");
+        GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(enduranceRing, 1), " E ", "AIA", " P ", 'E', Items.emerald, 'A', Items.golden_apple, 'P', endurancePot, 'I', Items.iron_ingot));
     }
 
     @Mod.EventHandler

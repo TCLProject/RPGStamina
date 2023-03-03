@@ -14,7 +14,7 @@ public class Network {
 		// Registers a packet, using the message handler class and the message class.
 		// The discriminator is the unique packet ID (range: 0-255). The side is the side that will receive the packet.
 		INSTANCE.registerMessage(ConfigSyncMessage.MessageHandler.class, ConfigSyncMessage.class, 0, Side.CLIENT);
-		INSTANCE.registerMessage(StaminaClientRefreshMessage.MessageHandler.class, StaminaClientRefreshMessage.class, 1, Side.CLIENT);
+		INSTANCE.registerMessage(StaminaNBTClientSyncMessage.MessageHandler.class, StaminaNBTClientSyncMessage.class, 1, Side.CLIENT);
 		INSTANCE.registerMessage(SpecialNeedsActionMessage.MessageHandler.class, SpecialNeedsActionMessage.class, 2, Side.SERVER);
 	}
 }

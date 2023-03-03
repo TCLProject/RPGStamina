@@ -13,6 +13,8 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.potion.PotionEffect;
 import net.minecraft.world.World;
 import net.tclproject.rpgstamina.EventHandler;
+import net.tclproject.rpgstamina.RPGStamina;
+
 
 public class ItemEnduranceRing extends Item implements IBauble {
 
@@ -58,8 +60,8 @@ public class ItemEnduranceRing extends Item implements IBauble {
 
     @Override
     public void onWornTick(ItemStack itemstack, EntityLivingBase player) {
-        if (itemstack.getItemDamage() == 0 && !player.isPotionActive(EventHandler.endurance)) {
-            player.addPotionEffect(new PotionEffect(EventHandler.endurance.id, 1800, 0, true));
+        if (itemstack.getItemDamage() == 0 && !player.isPotionActive(RPGStamina.endurance)) {
+            player.addPotionEffect(new PotionEffect(RPGStamina.endurance.id, 1800, 0, true));
         }
     }
 

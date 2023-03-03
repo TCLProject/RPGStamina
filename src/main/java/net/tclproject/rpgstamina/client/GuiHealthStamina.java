@@ -10,7 +10,6 @@ import cpw.mods.fml.relauncher.SideOnly;
 import net.minecraft.block.material.Material;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
-import net.minecraft.client.renderer.entity.RenderItem;
 import net.minecraft.util.ResourceLocation;
 import net.minecraftforge.client.GuiIngameForge;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
@@ -20,23 +19,16 @@ import net.tclproject.rpgstamina.config.Config;
 
 
 public class GuiHealthStamina extends Gui {
-
-	private Minecraft mc;
 	private static final ResourceLocation texturepath = new ResourceLocation("rpgstamina", "textures/stamina.png");
-	private static final ResourceLocation texturepath2 = new ResourceLocation("rpgstamina", "textures/staminaempty.png");
-	public static RenderItem itemRender = new RenderItem();
-
-	public GuiHealthStamina(Minecraft mc) {
-		super();
-		this.mc = mc; // We need this to invoke the render engine.
-	}
 
 	@SubscribeEvent(priority = EventPriority.NORMAL)
 	@SideOnly(Side.CLIENT)
 	public void renderHealthStaminaOverlays(RenderGameOverlayEvent event) {
 		if (Config.enableReplaceFood && GuiIngameForge.renderFood) GuiIngameForge.renderFood = false;
 
-		int elementNumber = Config.staminaHUDRenderMode;
+		Minecraft mc = Minecraft.getMinecraft();
+
+		int elementNumber = Config.staminaHUDHookElement;
 
 		if (elementNumber == 0) {
 			if (GuiIngameForge.renderHotbar) elementNumber = 1;
@@ -100,10 +92,10 @@ public class GuiHealthStamina extends Gui {
 				break;
 		}
 
-		if (event.isCancelable() || event.type != element || this.mc.thePlayer.capabilities.isCreativeMode) return;
+		if (event.isCancelable() || event.type != element || mc.thePlayer.capabilities.isCreativeMode) return;
 
-		ExtendedPlayer props = ExtendedPlayer.get(this.mc.thePlayer);
-		if (props == null || props.getMaxStamina() == 0) return;
+		ExtendedPlayer extended = ExtendedPlayer.get(mc.thePlayer);
+		if (extended == null || extended.getMaxStamina() == 0) return;
 
 		GL11.glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
 		GL11.glEnable(GL12.GL_RESCALE_NORMAL);
@@ -117,16 +109,23 @@ public class GuiHealthStamina extends Gui {
 		GL11.glPushMatrix();
 		GL11.glDisable(GL11.GL_ALPHA_TEST);
 
-		if (Config.staminaEmptyBar) {
-			Minecraft.getMinecraft().getTextureManager().bindTexture(texturepath2);
-			this.drawTexturedModalRect(event.resolution.getScaledWidth() / 2 + 10 + Config.staminaHUDXOffset, event.resolution.getScaledHeight() - (Config.enableReplaceFood? 39 : 50) + Config.staminaHUDYOffset - (Config.staminaHUDYOffset > -8 && mc.thePlayer.worldObj.getBlock((int) mc.thePlayer.posX, (int) mc.thePlayer.posY, (int) mc.thePlayer.posZ).getMaterial() == Material.water? 9 : 0), 0, 0, 81, 9);
-		}
+		int staminabarwidth = (int) ( ((float)extended.getCurrentStamina() / extended.getMaxStamina()) * 81);
+
+		int xPosition = event.resolution.getScaledWidth() / 2 + 10 + Config.staminaHUDXOffset + 81 - staminabarwidth;
+		int yPosition = event.resolution.getScaledHeight() - (Config.enableReplaceFood? 39 : 50) + Config.staminaHUDYOffset;
 
 		Minecraft.getMinecraft().getTextureManager().bindTexture(texturepath);
 
-		int staminabarwidth = (int) (((float) props.getCurrentStamina() / props.getMaxStamina()) * 81);
+		if (Config.staminaEmptyBar) this.drawTexturedModalRect(xPosition + staminabarwidth - 81, yPosition, 0, 9, 81, 9);
 
-		this.drawTexturedModalRect(event.resolution.getScaledWidth() / 2 + 10 + Config.staminaHUDXOffset, event.resolution.getScaledHeight() - (Config.enableReplaceFood? 39 : 50) + Config.staminaHUDYOffset - (Config.staminaHUDYOffset > -8 && mc.thePlayer.worldObj.getBlock((int) mc.thePlayer.posX, (int) mc.thePlayer.posY, (int) mc.thePlayer.posZ).getMaterial() == Material.water? 9 : 0), 0, 0, staminabarwidth, 9);
+		int textureStart = 81 - staminabarwidth;
+
+		if (Config.mirrorBar) {
+			xPosition = xPosition + staminabarwidth - 81;
+			textureStart = 0;
+		}
+
+		this.drawTexturedModalRect(xPosition, yPosition, textureStart, 0, staminabarwidth, 9);
 
 		GL11.glDisable(GL11.GL_BLEND);
 		GL11.glEnable(GL11.GL_DEPTH_TEST);

@@ -8,13 +8,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.ModelBiped;
 import net.minecraft.client.model.ModelRenderer;
 import net.minecraft.client.settings.KeyBinding;
-import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
-import net.minecraft.init.Items;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemFood;
 import net.minecraft.item.ItemStack;
@@ -23,6 +21,7 @@ import net.minecraft.potion.PotionEffect;
 import net.minecraft.util.FoodStats;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.WorldSettings;
 
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.event.entity.EntityEvent.EntityConstructing;
@@ -32,9 +31,9 @@ import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent.Clone;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
-import net.minecraftforge.oredict.ShapedOreRecipe;
-import net.minecraftforge.oredict.ShapelessOreRecipe;
+import net.minecraftforge.event.entity.player.PlayerUseItemEvent;
 
+import cpw.mods.fml.common.FMLCommonHandler;
 import cpw.mods.fml.common.Loader;
 import cpw.mods.fml.common.Optional;
 import cpw.mods.fml.common.eventhandler.EventPriority;
@@ -42,6 +41,7 @@ import cpw.mods.fml.common.eventhandler.SubscribeEvent;
 import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.common.gameevent.TickEvent;
 import cpw.mods.fml.common.registry.GameRegistry;
+import cpw.mods.fml.relauncher.ReflectionHelper;
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
@@ -54,49 +54,26 @@ import mods.battlegear2.client.BattlegearClientTickHandeler;
 import mods.battlegear2.enchantments.BaseEnchantment;
 import net.tclproject.rpgstamina.api.ExtendedPlayer;
 import net.tclproject.rpgstamina.config.Config;
-import net.tclproject.rpgstamina.mechanics.bauble.ItemEnduranceRing;
-import net.tclproject.rpgstamina.mechanics.enchant.EnchantmentLightFeet;
+import net.tclproject.rpgstamina.config.PlayerStage;
 import net.tclproject.rpgstamina.network.ConfigSyncMessage;
 import net.tclproject.rpgstamina.network.Network;
 import net.tclproject.rpgstamina.network.SpecialNeedsActionMessage;
-import net.tclproject.rpgstamina.mechanics.potion.PotionEndurance;
-import net.tclproject.rpgstamina.mechanics.potion.PotionEnduranceItem;
 
 
 @SuppressWarnings("unused")
 public class EventHandler {
-	public static Config.StageSettings[] stageList = Config.stageList;
-	public static int replenishAmount = Config.defaultStaminaGainForNaturalRegen;
+	public static int replenishAmount = Config.naturalRegenStaminaGain;
 
-	// External features
-	public static Enchantment lightFeet;
-	public static Potion endurance;
-	public static Item endurancePot, enduranceRing;
+	public static Field shieldBashButtonField, itemInUse, backhandOffhandItem;
+	static {
+		try {
+			if (Loader.isModLoaded("battlegear2") && FMLCommonHandler.instance().getSide() == Side.CLIENT) shieldBashButtonField = ReflectionHelper.findField(BattlegearClientTickHandeler.class, "special");
 
-	public EventHandler() {
-	// Code to only run at the game start.
+			if (Loader.isModLoaded("backhand")) backhandOffhandItem = ReflectionHelper.findField(InventoryPlayerBattle.class, "offhandItem");
 
-		if (Config.enchantmentEnabled) lightFeet = new EnchantmentLightFeet(Config.enchantmentID, 5);
-
-		if (Config.potionEnabled) {
-			endurance = new PotionEndurance(Config.potionID);
-			endurancePot = new PotionEnduranceItem().setUnlocalizedName("staminaEndurance").setTextureName("rpgstamina:potion_endurance");
-
-			GameRegistry.registerItem(endurancePot, "staminaEndurance");
-			GameRegistry.addRecipe(new ShapelessOreRecipe(new ItemStack(endurancePot), new ItemStack(Items.experience_bottle), Items.golden_carrot));
-
-			if (Loader.isModLoaded("Baubles") && Config.baubleEnabled) baublesRegister();
-		}
-	}
-
-
-	@Optional.Method(modid = "Baubles")
-	public static void baublesRegister() {
-	// Registers the endurance ring with baubles.
-
-		enduranceRing = new ItemEnduranceRing().setUnlocalizedName("staminaRing").setTextureName("rpgstamina:ring_endurance");
-		GameRegistry.registerItem(enduranceRing, "staminaRing");
-		GameRegistry.addRecipe(new ShapedOreRecipe(new ItemStack(enduranceRing, 1), " E ", "AIA", " P ", 'E', Items.emerald, 'A', Items.golden_apple, 'P', endurancePot, 'I', Items.iron_ingot));
+			itemInUse = ReflectionHelper.findField(EntityPlayer.class, "itemInUse", "field_71074_e");
+}
+		catch (Exception ignore) {}
 	}
 
 
@@ -107,18 +84,18 @@ public class EventHandler {
 		if (event.entity instanceof EntityPlayer && ExtendedPlayer.get((EntityPlayer) event.entity) == null) ExtendedPlayer.register((EntityPlayer) event.entity);
 	}
 
-
 	@SubscribeEvent
 	public void onEntityJoinWorld(EntityJoinWorldEvent event) {
 	// Synchronizes the values when the player joins back the server.
 
 		if (!event.entity.worldObj.isRemote && event.entity instanceof EntityPlayer) {
 			String configData = "";
-			if (Config.enableReplaceFood) configData += "1";
-			else configData += "0";
 
-			if (Config.enableReplaceShieldBar) configData += "1";
-			else configData += "0";
+			if (Config.enableReplaceFood) configData += "replaceFood:1|";
+			else configData += "replaceFood:0|";
+
+			if (Config.enableReplaceShieldBar) configData += "replaceBGShield:1|";
+			else configData += "replaceBGShield:0|";
 
 			Network.INSTANCE.sendTo(new ConfigSyncMessage(configData), (EntityPlayerMP) event.entity);
 			ExtendedPlayer.get((EntityPlayer) event.entity).sync();
@@ -157,13 +134,13 @@ public class EventHandler {
 		
 		EntityPlayer player = event.entityPlayer;
 		ExtendedPlayer extended = ExtendedPlayer.get(player);
+		PlayerStage stage = extended.getPlayerStage();
 
 		if (!player.worldObj.isRemote) {
-			boolean canAttack = !(extended.getPlayerStage() >= 0 && stageList[extended.getPlayerStage()].preventAttack);
+			boolean canAttack = !(stage != null && stage.preventAttack);
 			if (!canAttack) event.setCanceled(true);
 		}
 	}
-
 
 	@SideOnly(Side.CLIENT)
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -249,7 +226,6 @@ public class EventHandler {
 		}
 	}
 
-
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
 	public void onUpdatePlayer(LivingEvent.LivingUpdateEvent event) {
 	// Event fired on each update tick.
@@ -263,13 +239,15 @@ public class EventHandler {
 		int currentStamina = extended.getCurrentStamina();
 
 		// Finds the active player stage
-		stageList = Config.stageList;
-		int playerStage = findPlayerStage(player);
+		updatePlayerStage(player);
+		PlayerStage stage = extended.getPlayerStage();
 
 		// Emulates the food level when replaceFood is enabled
 		if (Config.enableReplaceFood) {
 			boolean cannotEatFood = false;
-			if (playerStage >= 0) cannotEatFood = stageList[playerStage].preventFoodEating;
+			if (stage != null) cannotEatFood = stage.preventFoodEating;
+
+			extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.EAT, !cannotEatFood);
 
 			FoodStats stats = player.getFoodStats();
 
@@ -282,18 +260,24 @@ public class EventHandler {
 		givePotionEffects(player);
 
 		// Prevents the player from sprinting if the stage is set to prevent it
-		boolean canSprint = !(playerStage >= 0 && stageList[playerStage].preventSprint);
+		boolean canSprint = !(stage != null && stage.preventSprint);
 		boolean isSprinting = (player.isSprinting() && player.fallDistance == 0 && Config.staminaGainForSprint != 0);
 		extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.SPRINT, canSprint);
 		if (isSprinting && !canSprint) player.setSprinting(false);
 
 		// Checks if the player will be allowed to jump or not.
-		boolean canJump = !(extended.getPlayerStage() >= 0 && stageList[extended.getPlayerStage()].preventJump);
+		boolean canJump = !(stage != null && stage.preventJump);
 		extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.JUMP, canJump);
 
 		// Checks if the player is allowed to use the current item (any hand) or not.
-		boolean canUseItem = extended.getPlayerStage() < 0 || player.getItemInUse() != null && player.getItemInUse().getItem() instanceof ItemFood ||
-		                     player.getItemInUse() != null && (stageList[extended.getPlayerStage()].internalItemUseList.contains(player.getItemInUse().getItem()) == stageList[extended.getPlayerStage()].useWhitelistForItemUseList);
+		ItemStack usedItem = null; // Uses reflection because Minecraft made getItemInUse client-side only for some reasons (and battlegear doesn't patch getHeldItem correctly).
+		try {
+			usedItem = (ItemStack) itemInUse.get(player);
+		}
+		catch (Exception ignore) {} // The field is there, unless some mod is dumb to change it, no need for a try/catch.
+
+		boolean canUseItem = stage == null || usedItem == null || usedItem.getItem() instanceof ItemFood ||
+		                     (stage.internalItemUseList.contains(usedItem.getItem()) == stage.useWhitelistForItemUseList);
 
 		// Same as above but if the player is using a shield from Battlegear 2.
 		if (Loader.isModLoaded("battlegear2")) {
@@ -301,7 +285,7 @@ public class EventHandler {
 			Item offhandItem = null;
 			if (offhandSlot != null) offhandItem = offhandSlot.getItem();
 
-			if (offhandItem instanceof IShield) canUseItem = extended.getPlayerStage() < 0 || (stageList[extended.getPlayerStage()].internalItemUseList.contains(offhandItem) == stageList[extended.getPlayerStage()].useWhitelistForItemUseList);
+			if (offhandItem instanceof IShield) canUseItem = stage == null || stage.internalItemUseList.contains(offhandItem) == stage.useWhitelistForItemUseList;
 		}
 		extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.ITEMUSE, canUseItem);
 
@@ -310,7 +294,7 @@ public class EventHandler {
 
 		// Grabs the item currently being used.
 		Item item = null;
-		if (player.getItemInUse() != null) item = player.getItemInUse().getItem();
+		if (usedItem != null) item = usedItem.getItem();
 
 		// Handles the item usage gain.
 		Object internalItemUseValue = null;
@@ -341,7 +325,7 @@ public class EventHandler {
 		// Handles the stamina consumption/regeneration
 		handleStaminaGain(player, internalItemUseValue);
 
-		if (replenishAmount != Config.defaultStaminaGainForNaturalRegen) replenishAmount = Config.defaultStaminaGainForNaturalRegen;
+		if (replenishAmount != Config.naturalRegenStaminaGain) replenishAmount = Config.naturalRegenStaminaGain;
 	}
 
 	@SubscribeEvent(priority = EventPriority.HIGHEST)
@@ -354,8 +338,8 @@ public class EventHandler {
 		// Emulates the food level when replaceFood is enabled
 		if (Config.enableReplaceFood) {
 			boolean cannotEatFood = false;
-			int playerStage = findPlayerStage(player);
-			if (playerStage >= 0) cannotEatFood = stageList[playerStage].preventFoodEating;
+			PlayerStage stage = extended.getPlayerStage();
+			if (stage != null) cannotEatFood = stage.preventFoodEating;
 
 			if (cannotEatFood || extended.getCurrentStamina() == extended.getMaxStamina()) player.getFoodStats().setFoodLevel(20);
 			else player.getFoodStats().setFoodLevel(15);
@@ -386,9 +370,11 @@ public class EventHandler {
 	// Gives the player the defined potion effects of the active stage.
 
 		String[] list = new String[0];
-		int playerStage = ExtendedPlayer.get(player).getPlayerStage();
+		ExtendedPlayer extended = ExtendedPlayer.get(player);
 
-		if (playerStage >= 0) list = stageList[playerStage].potionEffects;
+		PlayerStage stage = extended.getPlayerStage();
+
+		if (stage != null) list = stage.potionEffects;
 
 		for (String s : list) {
 			String[] splitted = s.split(":");
@@ -428,7 +414,9 @@ public class EventHandler {
 			int value;
 
 			// Sprint gain
-			int enchantLevel = EnchantmentHelper.getEnchantmentLevel(lightFeet.effectId, player.inventory.armorInventory[0]);
+			int enchantLevel = 0;
+			if (Config.enchantmentEnabled) enchantLevel = EnchantmentHelper.getEnchantmentLevel(RPGStamina.lightFeet.effectId, player.inventory.armorInventory[0]);
+
 			if (extended.getTickCounter(ExtendedPlayer.TickCounter.SPRINT) > (enchantLevel <= 0? 10 : 20 * enchantLevel)) {
 				value = Config.staminaGainForSprint;
 				extended.gainStamina(value);
@@ -461,8 +449,8 @@ public class EventHandler {
 				if (Loader.isModLoaded("battlegear2") && Config.enableDualBowSupport) {
 					ItemStack offhandSlot = ((InventoryPlayerBattle) player.inventory).getCurrentOffhandWeapon();
 
-					if (player.getItemInUse() != null && player.getItemInUse().getItem() == GameRegistry.findItem("minecraft", "bow") &&
-					    offhandSlot != null && player.getHeldItem() != null && offhandSlot.getItem() == player.getHeldItem().getItem()) value *= 2;
+					if (player.isUsingItem() && player.getHeldItem() != null && player.getHeldItem().getItem() == GameRegistry.findItem("minecraft", "bow") &&
+					    offhandSlot != null && offhandSlot.getItem() == player.getHeldItem().getItem()) value *= 2;
 				}
 
 				extended.gainStamina(value);
@@ -479,7 +467,17 @@ public class EventHandler {
 			}
 
 			// Natural regeneration.
-			if (!(extended.getPlayerAbility(ExtendedPlayer.PlayerAbility.REPLENISH)) && extended.getTickCounter(ExtendedPlayer.TickCounter.TIME) > 20 * Config.delayBeforeNaturalRegen) { // If the player just started to regenerate.
+			if (extended.getPlayerAbility(ExtendedPlayer.PlayerAbility.REPLENISH) && (!(Config.enableReplaceFood || player.getFoodStats().getFoodLevel() >= Config.naturalRegenRequiredFoodAmount) || !(Config.enableReplaceFood || player.getFoodStats().getSaturationLevel() >= Config.naturalRegenRequiredSaturationAmount))) {
+				extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.REPLENISH, false);
+
+				extended.setTickCounter(ExtendedPlayer.TickCounter.SPRINT, 0);
+				extended.setTickCounter(ExtendedPlayer.TickCounter.ITEMUSE, 0);
+				extended.setTickCounter(ExtendedPlayer.TickCounter.TIME, 0);
+			}
+
+			if (!(extended.getPlayerAbility(ExtendedPlayer.PlayerAbility.REPLENISH)) && (Config.enableReplaceFood || player.getFoodStats().getFoodLevel() >= Config.naturalRegenRequiredFoodAmount) &&
+			    (Config.enableReplaceFood || player.getFoodStats().getSaturationLevel() >= Config.naturalRegenRequiredSaturationAmount) && extended.getTickCounter(ExtendedPlayer.TickCounter.TIME) > 20 * Config.naturalRegenDelay) { // If the player just started to regenerate.
+
 				extended.gainStamina(replenishAmount);
 
 				extended.setPlayerAbility(ExtendedPlayer.PlayerAbility.REPLENISH, true);
@@ -496,14 +494,19 @@ public class EventHandler {
 		}
 	}
 
-	public static int findPlayerStage(EntityPlayer player) {
+	public static void updatePlayerStage(EntityPlayer player) {
 	// This function is responsible for finding the active player stage.
 
-		ExtendedPlayer extended = ExtendedPlayer.get(player);
-		extended.setPlayerStage(0);
-		for (int i = 1; i < stageList.length; i += 1) {
-			String string = stageList[i].stageMaximumValue;
+		EntityPlayerMP playerMP = (EntityPlayerMP) player;
+		WorldSettings.GameType gamemode = playerMP.theItemInWorldManager.getGameType();
 
+		ExtendedPlayer extended = ExtendedPlayer.get(player);
+		extended.setPlayerStage(null);
+
+		for (PlayerStage stage : Config.stageList) {
+			PlayerStage currentStage = extended.getPlayerStage();
+
+			String string = stage.stageMaximumValue;
 			boolean isPercentage = string.contains("%");
 			if (isPercentage) string = string.substring(0, string.indexOf("%"));
 
@@ -519,15 +522,19 @@ public class EventHandler {
 				value = -1; // If the stamina value isn't a number or a percentage, it disables the stage (sets it to -1 which isn't reachable).
 			}
 
-			stageList[i].realValue = value;
+			if (currentStage == null) stage.realValue = extended.getMaxStamina() + 1;
+			else stage.realValue = value;
 
-			if ((stageList[i].realValue < stageList[extended.getPlayerStage()].realValue || extended.getPlayerStage() == 0) && extended.getCurrentStamina() <= stageList[i].realValue) extended.setPlayerStage(i);
+			if (currentStage == null || (stage.realValue < currentStage.realValue && extended.getCurrentStamina() <= stage.realValue)) extended.setPlayerStage(stage);
 		}
-		if (player.capabilities.isCreativeMode) extended.setPlayerStage(-1); // If the player is in creative, we give him the -1 stage which disables the mod.
 
-		return extended.getPlayerStage();
+		if (gamemode.getID() % 2 > 0) extended.setPlayerStage(null); // If the player is in creative or spectator, we give him the null stage which disables the mod.
 	}
 
+	@SubscribeEvent
+	public void onFoodEaten(PlayerUseItemEvent event) {
+		System.out.println(event.item.getItem().getUnlocalizedName());
+	}
 
 	@SideOnly(Side.CLIENT)
 	@SubscribeEvent
@@ -541,8 +548,6 @@ public class EventHandler {
 
 			KeyBinding shieldBashButton = null; // Uses reflection because Battlegear was dumb enough to make the KeyBinding private.
 			try {
-				Field shieldBashButtonField = BattlegearClientTickHandeler.class.getDeclaredField("special");
-				shieldBashButtonField.setAccessible(true);
 				shieldBashButton = (KeyBinding) shieldBashButtonField.get(BattlegearClientTickHandeler.INSTANCE);
 			}
 			catch (Exception ignore) {} // The field is there, unless some mod usurpates Battlegear for some reasons, no need for a try/catch.
@@ -556,10 +561,10 @@ public class EventHandler {
 			}
 			catch (Exception ignore) {}
 
-			if (shieldBashButton.isPressed() && extended.getPlayerAbility(ExtendedPlayer.PlayerAbility.ITEMUSE) && AvailableBlockTime >= shieldConsumption && offhandItem != null && offhandItem.getItem() instanceof IShield) Network.INSTANCE.sendToServer(new SpecialNeedsActionMessage("battlegearShieldBashed"));
+			if (shieldBashButton.isPressed() && extended.getPlayerAbility(ExtendedPlayer.PlayerAbility.ITEMUSE) &&
+			    AvailableBlockTime >= shieldConsumption && offhandItem != null && offhandItem.getItem() instanceof IShield) Network.INSTANCE.sendToServer(new SpecialNeedsActionMessage("battlegearShieldBashed"));
 		}
 	}
-
 
 	@SubscribeEvent
 	public void onClonePlayer(Clone event) {
@@ -578,7 +583,6 @@ public class EventHandler {
 			else extended.setCurrentStamina(Config.staminaAmountAfterDeath);
 		}
 	}
-
 
 	@SubscribeEvent(priority = EventPriority.LOWEST)
 	public void onJump(LivingEvent.LivingJumpEvent event) {
@@ -613,7 +617,6 @@ public class EventHandler {
 
 	}
 
-
 	@SubscribeEvent
 	public void onItemUse(PlayerInteractEvent event) {
 	// Event fired whenever the player uses an item. (only in mainhand)
@@ -621,26 +624,49 @@ public class EventHandler {
 
 		EntityPlayer player = event.entityPlayer;
 		ExtendedPlayer extended = ExtendedPlayer.get(player);
+		PlayerStage stage = extended.getPlayerStage();
 
-		boolean canUseItem = extended.getPlayerStage() < 0 || player.getHeldItem() != null && player.getHeldItem().getItem() instanceof ItemFood ||
-		                     player.getHeldItem() != null && (stageList[extended.getPlayerStage()].internalItemUseList.contains(player.getHeldItem().getItem()) == stageList[extended.getPlayerStage()].useWhitelistForItemUseList);
+		boolean canUseItem = stage == null || player.getHeldItem() != null && player.getHeldItem().getItem() instanceof ItemFood ||
+		                     player.getHeldItem() != null && (stage.internalItemUseList.contains(player.getHeldItem().getItem()) == stage.useWhitelistForItemUseList);
 
-		if (event.action != PlayerInteractEvent.Action.LEFT_CLICK_BLOCK && !canUseItem) event.setCanceled(true);
+		if (event.action == PlayerInteractEvent.Action.RIGHT_CLICK_AIR && !canUseItem) event.setCanceled(true);
 	}
-
 
 	@Optional.Method(modid = "battlegear2")
 	@SubscribeEvent()
 	public void onOffhandUse(PlayerEventChild.UseOffhandItemEvent event) {
 	// Event fired whenever the player uses an item with Battlegear's offhand.
 	// Used to prevent the use of items in the offhand.
+	// Required as battlegear doesn't cancel the PlayerInteractEvent correctly.
 
 		EntityPlayer player = event.entityPlayer;
 		ExtendedPlayer extended = ExtendedPlayer.get(player);
 		ItemStack offhandItem = ((InventoryPlayerBattle) event.entityPlayer.inventory).getCurrentOffhandWeapon();
 
-		boolean canUseItem = extended.getPlayerStage() < 0 || offhandItem != null && offhandItem.getItem() instanceof ItemFood ||
-		                     offhandItem != null && (stageList[extended.getPlayerStage()].internalItemUseList.contains(offhandItem.getItem()) == stageList[extended.getPlayerStage()].useWhitelistForItemUseList);
+		boolean canUseItem = extended.getPlayerStage() == null || offhandItem != null && offhandItem.getItem() instanceof ItemFood ||
+		                     offhandItem != null && (extended.getPlayerStage().internalItemUseList.contains(offhandItem.getItem()) == extended.getPlayerStage().useWhitelistForItemUseList);
+
+		if (!canUseItem) event.setCanceled(true);
+	}
+
+	@Optional.Method(modid = "backhand")
+	@SubscribeEvent()
+	public void onOffhandBackhandUse(PlayerEventChild.UseOffhandItemEvent event) {
+	// Event fired whenever the player uses an item with Backhand's offhand.
+	// Used to prevent the use of items in the offhand.
+	// Required as Backhand doesn't bundle any mod with the "battlegear2" id. Same as the previous one.
+
+		EntityPlayer player = event.entityPlayer;
+		ExtendedPlayer extended = ExtendedPlayer.get(player);
+
+		ItemStack offhandItem = null;
+		try {
+			offhandItem = (ItemStack) backhandOffhandItem.get((InventoryPlayerBattle) event.entityPlayer.inventory);
+		}
+		catch (Exception ignore) {}
+
+		boolean canUseItem = extended.getPlayerStage() == null || offhandItem != null && offhandItem.getItem() instanceof ItemFood ||
+		                     offhandItem != null && (extended.getPlayerStage().internalItemUseList.contains(offhandItem.getItem()) == extended.getPlayerStage().useWhitelistForItemUseList);
 
 		if (!canUseItem) event.setCanceled(true);
 	}

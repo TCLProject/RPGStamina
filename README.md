@@ -35,7 +35,7 @@ A mod adding stamina mechanics to minecraft, similar to how it works in other ga
 
 ## Setting up a Development Environment
 
-You can set up a devevelopment environment by Gradle, with IntelliJIdea: `gradlew setupDecompWorkspace idea genIntellijRuns` or Eclipse: `gradlew setupDecompWorkspace eclipse` then import the project. Complete the running configurations with the following VM option: `-Dfml.coreMods.load=net.tclproject.mysteriumlib.asm.fixes.MysteriumPatchesFixLoader`
+You can set up a devevelopment environment by Gradle, with IntelliJIdea: `gradlew setupDecompWorkspace idea genIntellijRuns` or Eclipse: `gradlew setupDecompWorkspace eclipse` then import the project. Complete the running configurations with the following VM option: `-Dfml.coreMods.load=net.tclproject.mysteriumlib.asm.fixes.PatchesLoader`
 
 ## Contributing
 Pull requests are welcome.
